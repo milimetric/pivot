@@ -217,4 +217,8 @@ export class SplitCombine implements Instance<SplitCombineValue, SplitCombineJS>
     return '';
   }
 
+  public isBucketable(dimensions: List<Dimension>): boolean {
+    return this.getDimension(dimensions).canBucketByDefault();
+  }
+
 }

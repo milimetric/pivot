@@ -24,26 +24,26 @@ import { Manifest, Resolve } from '../../models/manifest/manifest';
 
 var handler = CircumstancesHandler.EMPTY()
 
-  .when((splits: Splits, dataCube: DataCube) => !(dataCube.getDimensionByKind('time') || dataCube.getDimensionByKind('number')))
+  .when((splits: Splits, dataCube: DataCube) => !(dataCube.dimensions.some((d) => d.canBucketByDefault())))
   .then(() => Resolve.NEVER)
 
   .when(CircumstancesHandler.noSplits())
   .then((splits: Splits, dataCube: DataCube) => {
-    let continuousDimensions = dataCube.getDimensionByKind('time').concat(dataCube.getDimensionByKind('number'));
+    let bucketedDimensions = dataCube.dimensions.filter((d) => d.canBucketByDefault());
     return Resolve.manual(3, 'This visualization requires a continuous dimension split',
-      continuousDimensions.toArray().map((continuousDimension) => {
+      bucketedDimensions.toArray().map((dimension) => {
         return {
-          description: `Add a split on ${continuousDimension.title}`,
+          description: `Add a split on ${dimension.title}`,
           adjustment: {
-            splits: Splits.fromSplitCombine(SplitCombine.fromExpression(continuousDimension.expression))
+            splits: Splits.fromSplitCombine(SplitCombine.fromExpression(dimension.expression))
           }
         };
       })
     );
   })
-
-  .when(CircumstancesHandler.areExactSplitKinds('time'))
-  .or(CircumstancesHandler.areExactSplitKinds('number'))
+  .when((splits: Splits, dataCube: DataCube) => {
+    return splits.toArray().length === 1 && splits.first().isBucketable(dataCube.dimensions);
+  })
   .then((splits: Splits, dataCube: DataCube, colors: Colors, current: boolean) => {
     var score = 4;
 
@@ -88,7 +88,12 @@ var handler = CircumstancesHandler.EMPTY()
     return Resolve.automatic(score, {splits: new Splits(List([continuousSplit]))});
   })
 
-  .when(CircumstancesHandler.areExactSplitKinds('time', '*'))
+  .when((splits: Splits, dataCube: DataCube) => {
+      let splitsArray = splits.toArray();
+      if (splitsArray.length !== 2) return false;
+      let firstSplit = splitsArray[0];
+      return firstSplit.getDimension(dataCube.dimensions).kind === 'time' && firstSplit.isBucketable(dataCube.dimensions);
+  })
   .then((splits: Splits, dataCube: DataCube, colors: Colors) => {
     var timeSplit = splits.get(0);
     var timeDimension = timeSplit.getDimension(dataCube.dimensions);
@@ -125,12 +130,15 @@ var handler = CircumstancesHandler.EMPTY()
     });
   })
 
-  .when(CircumstancesHandler.areExactSplitKinds('*', 'time'))
-  .or(CircumstancesHandler.areExactSplitKinds('*', 'number'))
+  .when((splits: Splits, dataCube: DataCube) => {
+    var splitsArray = splits.toArray();
+    if (splitsArray.length !== 2) return false;
+    let secondSplit = splitsArray[1];
+    return secondSplit.isBucketable(dataCube.dimensions);
+  })
   .then((splits: Splits, dataCube: DataCube, colors: Colors) => {
-    var timeSplit = splits.get(1);
-    var timeDimension = timeSplit.getDimension(dataCube.dimensions);
-
+    var secondSplit = splits.get(1);
+    var timeDimension = secondSplit.getDimension(dataCube.dimensions);
     let autoChanged = false;
 
     var sortAction: SortAction = new SortAction({
@@ -139,14 +147,14 @@ var handler = CircumstancesHandler.EMPTY()
     });
 
     // Fix time sort
-    if (!sortAction.equals(timeSplit.sortAction)) {
-      timeSplit = timeSplit.changeSortAction(sortAction);
+    if (!sortAction.equals(secondSplit.sortAction)) {
+      secondSplit = secondSplit.changeSortAction(sortAction);
       autoChanged = true;
     }
 
     // Fix time limit
-    if (timeSplit.limitAction) {
-      timeSplit = timeSplit.changeLimitAction(null);
+    if (secondSplit.limitAction) {
+      secondSplit = secondSplit.changeLimitAction(null);
       autoChanged = true;
     }
 
@@ -165,17 +173,19 @@ var handler = CircumstancesHandler.EMPTY()
 
     if (!autoChanged) return Resolve.ready(10);
     return Resolve.automatic(8, {
-      splits: new Splits(List([colorSplit, timeSplit])),
+      splits: new Splits(List([colorSplit, secondSplit])),
       colors
     });
   })
 
-  .when(CircumstancesHandler.haveAtLeastSplitKinds('time'))
+  .when((splits: Splits, dataCube: DataCube) => {
+    return splits.toArray().some((s) => s.isBucketable(dataCube.dimensions));
+  })
   .then((splits: Splits, dataCube: DataCube) => {
-    let timeSplit = splits.toArray().filter((split) => split.getDimension(dataCube.dimensions).kind === 'time')[0];
+    let timeSplit = splits.toArray().filter((split) => split.bucketAction !== null)[0];
     return Resolve.manual(3, 'Too many splits on the line chart', [
       {
-        description: `Remove all but the time split`,
+        description: `Remove all but the first split`,
         adjustment: {
           splits: Splits.fromSplitCombine(timeSplit)
         }
@@ -185,9 +195,9 @@ var handler = CircumstancesHandler.EMPTY()
 
   .otherwise(
     (splits: Splits, dataCube: DataCube) => {
-      let continuousDimensions = dataCube.getDimensionByKind('time').concat(dataCube.getDimensionByKind('number'));
-      return Resolve.manual(3, 'The Line Chart needs one continuous dimension split',
-        continuousDimensions.toArray().map((continuousDimension) => {
+      let bucketableDimensions = dataCube.dimensions.filter(d => d.canBucketByDefault());
+      return Resolve.manual(3, 'The Line Chart needs one bucketed split',
+        bucketableDimensions.toArray().map((continuousDimension) => {
           return {
             description: `Split on ${continuousDimension.title} instead`,
             adjustment: {
