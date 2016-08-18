@@ -179,7 +179,7 @@ var handler = CircumstancesHandler.EMPTY()
   })
 
   .when((splits: Splits, dataCube: DataCube) => {
-    return splits.toArray().some((s) => s.isBucketable(dataCube.dimensions));
+    return splits.toArray().every((s) => s.isBucketable(dataCube.dimensions));
   })
   .then((splits: Splits, dataCube: DataCube) => {
     let timeSplit = splits.toArray().filter((split) => split.bucketAction !== null)[0];
