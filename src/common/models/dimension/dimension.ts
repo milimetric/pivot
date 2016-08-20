@@ -30,7 +30,7 @@ function typeToKind(type: string): string {
   return type.toLowerCase().replace(/_/g, '-').replace(/-range$/, '');
 }
 
-export type BucketingStrategy = 'defaultBucket' | 'defaultNoBucket';
+export type BucketingStrategy = 'defaultBucket' | 'defaultNoBucket' | 'neverBucket' | 'alwaysBucket';
 
 export interface DimensionValue {
   name: string;
@@ -58,8 +58,10 @@ export interface DimensionJS {
 
 var check: Class<DimensionValue, DimensionJS>;
 export class Dimension implements Instance<DimensionValue, DimensionJS> {
+  static alwaysBucket: BucketingStrategy = 'alwaysBucket';
   static defaultBucket: BucketingStrategy = 'defaultBucket';
   static defaultNoBucket: BucketingStrategy = 'defaultNoBucket';
+  static neverBucket: BucketingStrategy = 'neverBucket';
 
   static isDimension(candidate: any): candidate is Dimension {
     return isInstanceOf(candidate, Dimension);
@@ -96,8 +98,6 @@ export class Dimension implements Instance<DimensionValue, DimensionJS> {
 
     var bucketingStrategy = parameters.bucketingStrategy;
     if (bucketingStrategy) {
-      if (bucketingStrategy === 'neverBucket') bucketingStrategy = Dimension.defaultNoBucket;
-      if (bucketingStrategy === 'alwaysBucket') bucketingStrategy = Dimension.defaultBucket;
       value.bucketingStrategy = bucketingStrategy;
     }
 
@@ -214,7 +214,15 @@ export class Dimension implements Instance<DimensionValue, DimensionJS> {
   }
 
   public canBucketByDefault(): boolean {
-    return this.isContinuous() && this.bucketingStrategy !== Dimension.defaultNoBucket;
+    return this.isContinuous() && this.bucketingStrategy !== Dimension.defaultNoBucket && this.bucketingStrategy !== Dimension.neverBucket;
+  }
+
+  public canBucketAtAll(): boolean {
+    return this.isContinuous() && this.bucketingStrategy !== Dimension.neverBucket;
+  }
+
+  public canUnbucket(): boolean {
+    return this.bucketingStrategy !== Dimension.alwaysBucket;
   }
 
   public isContinuous() {

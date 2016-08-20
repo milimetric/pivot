@@ -140,6 +140,19 @@ export class SplitCombine implements Instance<SplitCombineValue, SplitCombineJS>
     return SplitCombine.isSplitCombine(other) && expression.equals(other.expression);
   }
 
+  // if something has a bucket it will equal a split that also has a bucket
+  public equalsIgnoreSpecificGranularity(other: SplitCombine): boolean {
+    var { expression, bucketAction, sortAction, limitAction } = this;
+
+    return SplitCombine.isSplitCombine(other) &&
+      expression.equals(other.expression) &&
+      Boolean(bucketAction) === Boolean(other.bucketAction) &&
+      Boolean(sortAction) === Boolean(other.sortAction) &&
+      (!sortAction || sortAction.equals(other.sortAction)) &&
+      Boolean(limitAction) === Boolean(other.limitAction) &&
+      (!limitAction || limitAction.equals(other.limitAction));
+  }
+
   public toSplitExpression(): Expression {
     var { expression, bucketAction } = this;
     if (!bucketAction) return expression;
@@ -217,8 +230,12 @@ export class SplitCombine implements Instance<SplitCombineValue, SplitCombineJS>
     return '';
   }
 
-  public isBucketable(dimensions: List<Dimension>): boolean {
+  public canBucketByDefault(dimensions: List<Dimension>): boolean {
     return this.getDimension(dimensions).canBucketByDefault();
+  }
+
+  public isBucketed(): boolean {
+    return this.bucketAction !== null;
   }
 
 }

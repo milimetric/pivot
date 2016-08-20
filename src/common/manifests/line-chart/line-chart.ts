@@ -22,10 +22,88 @@ import {
 } from '../../utils/circumstances-handler/circumstances-handler';
 import { Manifest, Resolve } from '../../models/manifest/manifest';
 
-var handler = CircumstancesHandler.EMPTY()
+function adjustSingleSplit(splits: Splits, dataCube: DataCube, colors: Colors): any {
+  var continuousSplit = splits.get(0);
+  var continuousDimension = dataCube.getDimensionByExpression(continuousSplit.expression);
+  var sortStrategy = continuousDimension.sortStrategy;
 
-  .when((splits: Splits, dataCube: DataCube) => !(dataCube.dimensions.some((d) => d.canBucketByDefault())))
-  .then(() => Resolve.NEVER)
+  var sortAction: SortAction = null;
+  if (sortStrategy && sortStrategy !== 'self') {
+    sortAction = new SortAction({
+      expression: $(sortStrategy),
+      direction: SortAction.ASCENDING
+    });
+  } else {
+    sortAction = new SortAction({
+      expression: $(continuousDimension.name),
+      direction: SortAction.ASCENDING
+    });
+  }
+
+  let autoChanged = false;
+
+  // Fix time sort
+  if (!sortAction.equals(continuousSplit.sortAction)) {
+    continuousSplit = continuousSplit.changeSortAction(sortAction);
+    autoChanged = true;
+  }
+
+  // Fix time limit
+  if (continuousSplit.limitAction && continuousDimension.kind === 'time') {
+    continuousSplit = continuousSplit.changeLimitAction(null);
+    autoChanged = true;
+  }
+
+  if (colors) {
+    autoChanged = true;
+  }
+
+  return {
+    then: (score: (split: SplitCombine, dimension: Dimension, autoChanged: boolean) => Resolve) => {
+      return score(continuousSplit, continuousDimension, autoChanged);
+    }
+  };
+}
+
+function adjustTwoSplits(secondSplit: SplitCombine, colorSplit: SplitCombine, dataCube: DataCube, colors: Colors): any {
+  var timeDimension = secondSplit.getDimension(dataCube.dimensions);
+  let autoChanged = false;
+
+  var sortAction: SortAction = new SortAction({
+    expression: $(timeDimension.name),
+    direction: SortAction.ASCENDING
+  });
+
+  // Fix time sort
+  if (!sortAction.equals(secondSplit.sortAction)) {
+    secondSplit = secondSplit.changeSortAction(sortAction);
+    autoChanged = true;
+  }
+
+  // Fix time limit
+  if (secondSplit.limitAction) {
+    secondSplit = secondSplit.changeLimitAction(null);
+    autoChanged = true;
+  }
+
+  if (!colorSplit.sortAction) {
+    colorSplit = colorSplit.changeSortAction(dataCube.getDefaultSortAction());
+    autoChanged = true;
+  }
+
+  var colorSplitDimension = dataCube.getDimensionByExpression(colorSplit.expression);
+  if (!colors || colors.dimension !== colorSplitDimension.name) {
+    colors = Colors.fromLimit(colorSplitDimension.name, 5);
+    autoChanged = true;
+  }
+
+  return {
+    then: (score: (secondSplit: SplitCombine, colorSplit: SplitCombine, timeDimension: Dimension, colors: Colors, autoChanged: boolean) => Resolve) => {
+      return score(secondSplit, colorSplit, timeDimension, colors, autoChanged);
+    }
+  };
+}
+var handler = CircumstancesHandler.EMPTY()
 
   .when(CircumstancesHandler.noSplits())
   .then((splits: Splits, dataCube: DataCube) => {
@@ -41,145 +119,73 @@ var handler = CircumstancesHandler.EMPTY()
       })
     );
   })
+
+  // .when((splits: Splits, dataCube: DataCube) => !(splits.toArray().some((s) => s.isBucketed())))
+  // .then(() => Resolve.NEVER)
+
   .when((splits: Splits, dataCube: DataCube) => {
-    return splits.toArray().length === 1 && splits.first().isBucketable(dataCube.dimensions);
+    return splits.toArray().length === 1 && splits.first().isBucketed();
   })
   .then((splits: Splits, dataCube: DataCube, colors: Colors, current: boolean) => {
-    var score = 4;
-
-    var continuousSplit = splits.get(0);
-    var continuousDimension = dataCube.getDimensionByExpression(continuousSplit.expression);
-    var sortStrategy = continuousDimension.sortStrategy;
-
-    var sortAction: SortAction = null;
-    if (sortStrategy && sortStrategy !== 'self') {
-      sortAction = new SortAction({
-        expression: $(sortStrategy),
-        direction: SortAction.ASCENDING
-      });
-    } else {
-      sortAction = new SortAction({
-        expression: $(continuousDimension.name),
-        direction: SortAction.ASCENDING
-      });
-    }
-
-    let autoChanged = false;
-
-    // Fix time sort
-    if (!sortAction.equals(continuousSplit.sortAction)) {
-      continuousSplit = continuousSplit.changeSortAction(sortAction);
-      autoChanged = true;
-    }
-
-    // Fix time limit
-    if (continuousSplit.limitAction && continuousDimension.kind === 'time') {
-      continuousSplit = continuousSplit.changeLimitAction(null);
-      autoChanged = true;
-    }
-
-    if (colors) {
-      autoChanged = true;
-    }
-
-    if (continuousDimension.kind === 'time') score += 3;
-
-    if (!autoChanged) return Resolve.ready(current ? 10 : score);
-    return Resolve.automatic(score, {splits: new Splits(List([continuousSplit]))});
+    return adjustSingleSplit(splits, dataCube, colors)
+      .then((split: SplitCombine, dimension: Dimension, autoChanged: boolean) => {
+        var score = 5;
+        if (split.canBucketByDefault(dataCube.dimensions)) score += 2;
+        if (dimension.kind === 'time') score += 3;
+        if (current) score = Manifest;
+        if (!autoChanged) return Resolve.ready(score);
+        return Resolve.automatic(score, {splits: new Splits(List([split]))});
+    });
   })
 
   .when((splits: Splits, dataCube: DataCube) => {
       let splitsArray = splits.toArray();
       if (splitsArray.length !== 2) return false;
       let firstSplit = splitsArray[0];
-      return firstSplit.getDimension(dataCube.dimensions).kind === 'time' && firstSplit.isBucketable(dataCube.dimensions);
+      return firstSplit.isBucketed();
   })
   .then((splits: Splits, dataCube: DataCube, colors: Colors) => {
     var timeSplit = splits.get(0);
-    var timeDimension = timeSplit.getDimension(dataCube.dimensions);
-
-    var sortAction: SortAction = new SortAction({
-      expression: $(timeDimension.name),
-      direction: SortAction.ASCENDING
-    });
-
-    // Fix time sort
-    if (!sortAction.equals(timeSplit.sortAction)) {
-      timeSplit = timeSplit.changeSortAction(sortAction);
-    }
-
-    // Fix time limit
-    if (timeSplit.limitAction) {
-      timeSplit = timeSplit.changeLimitAction(null);
-    }
-
     let colorSplit = splits.get(1);
+    return adjustTwoSplits(timeSplit, colorSplit, dataCube, colors)
+      .then((secondSplit: SplitCombine, colorSplit: SplitCombine, timeDimension: Dimension, colors: Colors, autoChanged: boolean) => {
+        let score = 4;
+        if (timeDimension.canBucketByDefault()) score += 2;
+        if (timeDimension.kind === 'time') score += 2;
 
-    if (!colorSplit.sortAction) {
-      colorSplit = colorSplit.changeSortAction(dataCube.getDefaultSortAction());
-    }
-
-    var colorSplitDimension = dataCube.getDimensionByExpression(colorSplit.expression);
-    if (!colors || colors.dimension !== colorSplitDimension.name) {
-      colors = Colors.fromLimit(colorSplitDimension.name, 5);
-    }
-
-    return Resolve.automatic(8, {
-      splits: new Splits(List([colorSplit, timeSplit])),
-      colors
-    });
+        return Resolve.automatic(score, {
+          splits: new Splits(List([colorSplit, timeSplit])),
+          colors
+        });
+      });
   })
 
   .when((splits: Splits, dataCube: DataCube) => {
     var splitsArray = splits.toArray();
     if (splitsArray.length !== 2) return false;
     let secondSplit = splitsArray[1];
-    return secondSplit.isBucketable(dataCube.dimensions);
+    return secondSplit.isBucketed();
   })
   .then((splits: Splits, dataCube: DataCube, colors: Colors) => {
     var secondSplit = splits.get(1);
-    var timeDimension = secondSplit.getDimension(dataCube.dimensions);
-    let autoChanged = false;
-
-    var sortAction: SortAction = new SortAction({
-      expression: $(timeDimension.name),
-      direction: SortAction.ASCENDING
-    });
-
-    // Fix time sort
-    if (!sortAction.equals(secondSplit.sortAction)) {
-      secondSplit = secondSplit.changeSortAction(sortAction);
-      autoChanged = true;
-    }
-
-    // Fix time limit
-    if (secondSplit.limitAction) {
-      secondSplit = secondSplit.changeLimitAction(null);
-      autoChanged = true;
-    }
-
     let colorSplit = splits.get(0);
+    return adjustTwoSplits(secondSplit, colorSplit, dataCube, colors)
+      .then((secondSplit: SplitCombine, colorSplit: SplitCombine, timeDimension: Dimension, colors: Colors, autoChanged: boolean) => {
+        let score = 4;
+        if (timeDimension.canBucketByDefault()) score += 2;
+        if (timeDimension.kind === 'time') score += 2;
+        if (!autoChanged) score += 2;
 
-    if (!colorSplit.sortAction) {
-      colorSplit = colorSplit.changeSortAction(dataCube.getDefaultSortAction());
-      autoChanged = true;
-    }
-
-    var colorSplitDimension = dataCube.getDimensionByExpression(colorSplit.expression);
-    if (!colors || colors.dimension !== colorSplitDimension.name) {
-      colors = Colors.fromLimit(colorSplitDimension.name, 5);
-      autoChanged = true;
-    }
-
-    if (!autoChanged) return Resolve.ready(10);
-    return Resolve.automatic(8, {
-      splits: new Splits(List([colorSplit, secondSplit])),
-      colors
-    });
+        if (!autoChanged) return Resolve.ready(score);
+        return Resolve.automatic(score, {
+          splits: new Splits(List([colorSplit, secondSplit])),
+          colors
+        });
+      });
   })
 
   .when((splits: Splits, dataCube: DataCube) => {
-    return splits.toArray().every((s) => s.isBucketable(dataCube.dimensions));
+    return splits.toArray().every((s) => s.isBucketed());
   })
   .then((splits: Splits, dataCube: DataCube) => {
     let timeSplit = splits.toArray().filter((split) => split.bucketAction !== null)[0];

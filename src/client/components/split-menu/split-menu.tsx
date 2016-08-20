@@ -110,8 +110,9 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
   onSelectGranularity(granularity: Granularity): void {
     var { split } = this.state;
     var bucketAction = split.bucketAction as Granularity;
+    var newAction = bucketAction ? updateBucketSize(bucketAction, granularity) : granularity;
     this.setState({
-      split: split.changeBucketAction(updateBucketSize(bucketAction, granularity))
+      split: split.changeBucketAction(newAction)
     });
   }
 
@@ -170,13 +171,21 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
     return SortOn.fromSortAction(split.sortAction, essence.dataCube, dimension);
   }
 
+  removeBucketing() {
+    var { split } = this.state;
+    this.setState({
+      split: split.changeBucketAction(null)
+    });
+  }
+
   renderGranularityPicker(type: ContinuousDimensionKind) {
     var { split } = this.state;
     var { dimension } = this.props;
-    var selectedGran = granularityToString(split.bucketAction as Granularity);
+    var { bucketAction } = split;
+    var selectedGran = bucketAction ? granularityToString(bucketAction as Granularity) : 'none';
     const granularities = dimension.granularities || getGranularities(type, dimension.bucketedBy);
     var buttons = granularities.map((g: Granularity) => {
-      const granularityStr = granularityToString(g);
+      const granularityStr = g ? granularityToString(g) : 'none';
       return {
         isSelected: granularityStr === selectedGran,
         title: formatGranularity(granularityStr),
@@ -184,6 +193,16 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
         onClick: this.onSelectGranularity.bind(this, g)
       };
     });
+
+    var showNoBuckets = dimension.canUnbucket();
+    if (showNoBuckets) {
+      buttons.splice(0, 1, {
+        isSelected: !split.bucketAction,
+        title: 'none',
+        key: 'none',
+        onClick: this.removeBucketing.bind(this)
+      });
+    }
 
     return <ButtonGroup title={STRINGS.granularity} groupMembers={buttons} />;
   }
@@ -208,7 +227,7 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
 
   renderSortDirection() {
     var { split } = this.state;
-    var direction = split.sortAction.direction;
+    var direction = split.sortAction ? split.sortAction.direction : "ascending"; // sort action isn't set unless theres a bucket?
 
     return <div className="sort-direction">
       {this.renderSortDropdown()}
@@ -283,9 +302,9 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
     var menuSize = Stage.fromSize(250, 240);
 
     var menuControls: JSX.Element = null;
-    if (split.bucketAction instanceof TimeBucketAction) {
+    if (dimension.kind === 'time' && dimension.canBucketAtAll()) {
       menuControls = this.renderTimeControls();
-    } else if (split.bucketAction instanceof NumberBucketAction) {
+    } else if (dimension.kind === 'number' && dimension.canBucketAtAll()) {
       menuControls = this.renderNumberControls();
     } else {
       menuControls = this.renderStringControls();

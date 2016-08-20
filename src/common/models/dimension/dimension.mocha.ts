@@ -55,6 +55,34 @@ describe('Dimension', () => {
         url: 'http://www.time.com/%s',
         granularities: ['PT1M', 'P6M', 'PT6H', 'P1D', 'P1W'],
         bucketedBy: 'PT6H'
+      },
+      {
+        name: 'country',
+        title: 'important countries',
+        formula: '$country',
+        kind: 'string',
+        bucketingStrategy: 'neverBucket'
+      },
+      {
+        name: 'country',
+        title: 'important countries',
+        formula: '$country',
+        kind: 'string',
+        bucketingStrategy: 'defaultNoBucket'
+      },
+      {
+        name: 'country',
+        title: 'important countries',
+        formula: '$country',
+        kind: 'string',
+        bucketingStrategy: 'alwaysBucket'
+      },
+      {
+        name: 'country',
+        title: 'important countries',
+        formula: '$country',
+        kind: 'string',
+        bucketingStrategy: 'defaultBucket'
       }
     ]);
   });
@@ -73,39 +101,6 @@ describe('Dimension', () => {
         kind: 'string'
       });
     });
-
-    it('neverBucket -> default no bucket', () => {
-      expect(Dimension.fromJS({
-        name: 'country',
-        title: 'important countries',
-        expression: '$country',
-        kind: 'string',
-        bucketingStrategy: 'neverBucket'
-      } as any).toJS()).to.deep.equal({
-        name: 'country',
-        title: 'important countries',
-        formula: '$country',
-        kind: 'string',
-        bucketingStrategy: 'defaultNoBucket'
-      });
-    });
-
-    it('alwaysBucket -> default bucket', () => {
-      expect(Dimension.fromJS({
-        name: 'country',
-        title: 'important countries',
-        expression: '$country',
-        kind: 'string',
-        bucketingStrategy: 'alwaysBucket'
-      } as any).toJS()).to.deep.equal({
-        name: 'country',
-        title: 'important countries',
-        formula: '$country',
-        kind: 'string',
-        bucketingStrategy: 'defaultBucket'
-      });
-    });
-
   });
 
   describe('errors', () => {

@@ -88,6 +88,16 @@ export class Splits implements Instance<SplitsValue, SplitsJS> {
       immutableListsEqual(this.splitCombines, other.splitCombines);
   }
 
+  public allSplitsAreDifferent(other: Splits): boolean {
+    var otherArray = other.toArray();
+    return List(this.splitCombines.toArray()).every(s => otherArray.indexOf(s) === -1 );
+  }
+
+  public someSplitsAreDifferent(other: Splits): boolean {
+    var otherArray = other.toArray();
+    return List(this.splitCombines.toArray()).some(s => otherArray.indexOf(s) === -1 );
+  }
+
   public replaceByIndex(index: number, replace: SplitCombine): Splits {
     var { splitCombines } = this;
     if (splitCombines.size === index) return this.insertByIndex(index, replace);
@@ -193,7 +203,7 @@ export class Splits implements Instance<SplitsValue, SplitsJS> {
       var splitExpression = splitCombine.expression;
       var splitDimension = dimensions.find(d => splitExpression.equals(d.expression));
       var splitKind = splitDimension.kind;
-      if (!splitDimension || !(splitKind === 'time' || splitKind === 'number') || !splitDimension.canBucketByDefault()) return splitCombine;
+      if (!splitDimension || !splitDimension.canBucketByDefault()) return splitCombine;
       changed = true;
 
       var selectionSet = filter.getLiteralSet(splitExpression);
@@ -275,6 +285,22 @@ export class Splits implements Instance<SplitsValue, SplitsJS> {
     }
     return commonSort;
   }
+
+  public allBucketingProfileHasChanged(newSplits: Splits) {
+    let currentSplits = List(this.splitCombines.toArray());
+    return currentSplits.every((cs) => {
+      let foundEquality = false;
+      newSplits.forEach(ns => {
+        if (ns.equalsIgnoreSpecificGranularity(cs)) {
+          foundEquality = true;
+          return;
+        }
+      });
+      return !foundEquality;
+    });
+
+  }
+
 
 }
 check = Splits;

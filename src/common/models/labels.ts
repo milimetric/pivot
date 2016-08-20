@@ -50,8 +50,8 @@ export const DIMENSION = {
     description: `A set of exactly 5 granularities that you want to be available for bucketing.`
   },
   bucketingStrategy: {
-    label: `Default Bucketing`,
-    description: `Specify whether or not the dimension should be bucketed by default.`
+    label: `Bucketing Strategy`,
+    description: `Specify how you'd like your dimension to bucketed.`
   }
 };
 

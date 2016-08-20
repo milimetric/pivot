@@ -41,12 +41,15 @@ export class DimensionModal extends React.Component<DimensionModalProps, Immutab
     {label: 'Time', value: 'time'},
     {label: 'String', value: 'string'},
     {label: 'Boolean', value: 'boolean'},
+    {label: 'Number', value: 'number'},
     {label: 'String-geo', value: 'string-geo'}
   ];
 
   static BUCKETING_STRATEGIES = [
-    {label: 'Bucket', value: Dimension.defaultBucket},
-    {label: 'Don’t Bucket', value: Dimension.defaultNoBucket}
+    {label: 'Always bucket', value: Dimension.alwaysBucket},
+    {label: 'Default bucket', value: Dimension.defaultBucket},
+    {label: 'Default don’t ducket', value: Dimension.defaultNoBucket},
+    {label: 'Never bucket', value: Dimension.neverBucket}
   ];
 
   private delegate: ImmutableFormDelegate<Dimension>;
