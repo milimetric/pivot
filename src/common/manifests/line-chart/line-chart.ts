@@ -132,7 +132,7 @@ var handler = CircumstancesHandler.EMPTY()
         var score = 5;
         if (split.canBucketByDefault(dataCube.dimensions)) score += 2;
         if (dimension.kind === 'time') score += 3;
-        if (current) score = Manifest;
+        if (current) score = 10;
         if (!autoChanged) return Resolve.ready(score);
         return Resolve.automatic(score, {splits: new Splits(List([split]))});
     });

@@ -227,7 +227,7 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
 
   renderSortDirection() {
     var { split } = this.state;
-    var direction = split.sortAction ? split.sortAction.direction : "ascending"; // sort action isn't set unless theres a bucket?
+    var direction = split.sortAction.direction;
 
     return <div className="sort-direction">
       {this.renderSortDropdown()}
