@@ -214,6 +214,7 @@ export function granularityFromJS(input: GranularityJS): Granularity {
 }
 
 export function granularityToString(input: Granularity): string {
+  if (!input) return "none";
   if (input instanceof TimeBucketAction) {
     return input.duration.toString();
   } else if (input instanceof NumberBucketAction) {
@@ -251,7 +252,11 @@ export function updateBucketSize(existing: Granularity, newInput: Granularity): 
     });
   } else if (newInput instanceof NumberBucketAction) {
     var value: ActionValue = { size: (newInput as NumberBucketAction).size };
-    if ((existing as NumberBucketAction).offset) value.offset = (existing as NumberBucketAction).offset;
+    if (!existing) {
+      value.offset = newInput.offset;
+    } else if ((existing as NumberBucketAction).offset) {
+      value.offset = (existing as NumberBucketAction).offset;
+    }
     return new NumberBucketAction(value);
   }
   throw new Error(`unrecognized granularity: ${newInput} must be of type TimeBucket or NumberBucket`);

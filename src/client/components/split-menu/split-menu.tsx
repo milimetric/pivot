@@ -110,7 +110,7 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
   onSelectGranularity(granularity: Granularity): void {
     var { split } = this.state;
     var bucketAction = split.bucketAction as Granularity;
-    var newAction = bucketAction ? updateBucketSize(bucketAction, granularity) : granularity;
+    var newAction = granularity ? updateBucketSize(bucketAction, granularity) : null;
     this.setState({
       split: split.changeBucketAction(newAction)
     });
@@ -171,21 +171,18 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
     return SortOn.fromSortAction(split.sortAction, essence.dataCube, dimension);
   }
 
-  removeBucketing() {
-    var { split } = this.state;
-    this.setState({
-      split: split.changeBucketAction(null)
-    });
-  }
-
   renderGranularityPicker(type: ContinuousDimensionKind) {
     var { split } = this.state;
     var { dimension } = this.props;
     var { bucketAction } = split;
-    var selectedGran = bucketAction ? granularityToString(bucketAction as Granularity) : 'none';
+    var selectedGran = granularityToString(bucketAction as Granularity);
     const granularities = dimension.granularities || getGranularities(type, dimension.bucketedBy);
+    var showNoBuckets = dimension.canUnbucket();
+    if (showNoBuckets) {
+      granularities.splice(0, 1, null);
+    }
     var buttons = granularities.map((g: Granularity) => {
-      const granularityStr = g ? granularityToString(g) : 'none';
+      const granularityStr = granularityToString(g);
       return {
         isSelected: granularityStr === selectedGran,
         title: formatGranularity(granularityStr),
@@ -193,16 +190,6 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
         onClick: this.onSelectGranularity.bind(this, g)
       };
     });
-
-    var showNoBuckets = dimension.canUnbucket();
-    if (showNoBuckets) {
-      buttons.splice(0, 1, {
-        isSelected: !split.bucketAction,
-        title: 'none',
-        key: 'none',
-        onClick: this.removeBucketing.bind(this)
-      });
-    }
 
     return <ButtonGroup title={STRINGS.granularity} groupMembers={buttons} />;
   }
@@ -296,15 +283,16 @@ export class SplitMenu extends React.Component<SplitMenuProps, SplitMenuState> {
 
   render() {
     var { containerStage, openOn, dimension, onClose, inside } = this.props;
-    var { split } = this.state;
     if (!dimension) return null;
+    var { kind } = dimension;
+    var isBucketable = dimension.isBucketable();
 
     var menuSize = Stage.fromSize(250, 240);
 
     var menuControls: JSX.Element = null;
-    if (dimension.kind === 'time' && dimension.canBucketAtAll()) {
+    if (kind === 'time' && isBucketable) {
       menuControls = this.renderTimeControls();
-    } else if (dimension.kind === 'number' && dimension.canBucketAtAll()) {
+    } else if (kind === 'number' && isBucketable) {
       menuControls = this.renderNumberControls();
     } else {
       menuControls = this.renderStringControls();

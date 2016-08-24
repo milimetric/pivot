@@ -217,11 +217,12 @@ export class Dimension implements Instance<DimensionValue, DimensionJS> {
     return this.isContinuous() && this.bucketingStrategy !== Dimension.defaultNoBucket && this.bucketingStrategy !== Dimension.neverBucket;
   }
 
-  public canBucketAtAll(): boolean {
+  public isBucketable(): boolean {
     return this.isContinuous() && this.bucketingStrategy !== Dimension.neverBucket;
   }
 
   public canUnbucket(): boolean {
+    if (!this.bucketingStrategy && this.kind === 'time') return false;
     return this.bucketingStrategy !== Dimension.alwaysBucket;
   }
 
